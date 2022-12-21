@@ -1,5 +1,4 @@
-service:
-  name: serverless-application-ToDos
+service: serverless-application-ToDos
 
 plugins:
   - serverless-webpack
@@ -12,7 +11,7 @@ provider:
   name: aws
   runtime: nodejs12.x
   stage: ${opt:stage, 'dev'}
-  region: ${opt:region, 'ap-southeast-1'}
+  region: ${opt:region, 'us-east-1'}
   
 
   tracing: 
