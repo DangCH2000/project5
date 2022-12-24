@@ -8,7 +8,7 @@
     "aws-xray-sdk": "^2.5.0",
     "axios": "^0.27.2",
     "http-errors": "^1.8.1",
-    "jsonwebtoken": "^8.5.1",
+    "jsonwebtoken": "^9.0.0",
     "middy": "^0.24.0",
     "request-promise": "^4.2.6",
     "source-map-support": "^0.5.21",
@@ -19,7 +19,7 @@
     "@types/aws-lambda": "^8.10.109",
     "@types/jsonwebtoken": "^8.5.9",
     "@types/node": "^10.17.60",
-    "aws-sdk": "^2.1280.0",
+    "aws-sdk": "^2.1282.0",
     "serverless-aws-documentation": "^1.1.0",
     "serverless-iam-roles-per-function": "^3.2.0",
     "serverless-plugin-canary-deployments": "^0.4.8",
@@ -28,7 +28,7 @@
     "serverless-webpack": "^5.11.0",
     "ts-loader": "^5.4.5",
     "typescript": "4.6.4",
-    "webpack": "^4.46.0"
+    "webpack": "^5.75.0"
   },
   "author": "Ivan Mushketyk",
   "license": "MIT"

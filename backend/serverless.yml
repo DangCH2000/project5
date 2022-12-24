@@ -12,22 +12,29 @@ provider:
   runtime: nodejs12.x
   stage: ${opt:stage, 'dev'}
   region: ${opt:region, 'us-east-1'}
-  
 
-  tracing: 
+  tracing:
     lambda: true
     apiGateway: true
 
   environment:
     PROJECT_NAME: udacity-p4
     TODOS_TABLE: serverless-application-todos-${self:provider.stage}
+    CONNECTIONS_TABLE: Connectionss-${self:provider.stage}
     S3_BUCKET_NAME: serverless-application-todos-${self:provider.stage}
     SIGNED_EXPIRATION: 300
-    
+
   logs:
     restApi: true
 
 custom:
+  topicName: imagesTopic-${self:provider.stage}
+  dynamodb:
+    start:
+      migrate: true
+      inMemory: true
+    stages:
+      - dev
   documentation:
     api:
       info:
@@ -36,7 +43,7 @@ custom:
         description: serverless-application-todo-api
     models:
       - name: CreateTodoRequest
-        contentType: "application/json"
+        contentType: 'application/json'
         schema:
           required:
             - name
@@ -48,7 +55,7 @@ custom:
             dueDate:
               type: string
       - name: UpdateTodoRequest
-        contentType: "application/json"
+        contentType: 'application/json'
         schema:
           required:
             - name
@@ -62,10 +69,8 @@ custom:
               type: string
             done:
               type: boolean
-          
 
 functions:
-
   Auth:
     handler: src/lambda/auth/auth0Authorizer.handler
 
@@ -87,11 +92,9 @@ functions:
         Action:
           - xray:PutTraceSegments
           - xray:PutTelemetryRecords
-        Resource: 
+        Resource:
           - '*'
 
- 
- 
   CreateTodo:
     handler: src/lambda/http/createTodo.handler
     events:
@@ -101,10 +104,10 @@ functions:
           cors: true
           authorizer: Auth
           documentation:
-            summary: "Create a new todo item"
-            description: "Create a new todo item"
+            summary: 'Create a new todo item'
+            description: 'Create a new todo item'
             requestModels:
-              "application/json": CreateTodoRequest
+              'application/json': CreateTodoRequest
           reqValidatorName: RequestBodyValidator
     iamRoleStatementsName: ${self:provider.environment.PROJECT_NAME}-create-todo-role-${self:provider.stage}
     iamRoleStatements:
@@ -116,10 +119,9 @@ functions:
         Action:
           - xray:PutTraceSegments
           - xray:PutTelemetryRecords
-        Resource: 
+        Resource:
           - '*'
 
-  
   UpdateTodo:
     handler: src/lambda/http/updateTodo.handler
     events:
@@ -129,10 +131,10 @@ functions:
           cors: true
           authorizer: Auth
           documentation:
-            summary: "Update a todo item"
-            description: "Update a todo item"
+            summary: 'Update a todo item'
+            description: 'Update a todo item'
             requestModels:
-              "application/json": UpdateTodoRequest
+              'application/json': UpdateTodoRequest
           reqValidatorName: RequestBodyValidator
     iamRoleStatementsName: ${self:provider.environment.PROJECT_NAME}-update-todo-role-${self:provider.stage}
     iamRoleStatements:
@@ -144,9 +146,8 @@ functions:
         Action:
           - xray:PutTraceSegments
           - xray:PutTelemetryRecords
-        Resource: 
+        Resource:
           - '*'
-
 
   DeleteTodo:
     handler: src/lambda/http/deleteTodo.handler
@@ -166,10 +167,9 @@ functions:
         Action:
           - xray:PutTraceSegments
           - xray:PutTelemetryRecords
-        Resource: 
+        Resource:
           - '*'
 
-  
   GenerateUploadUrl:
     handler: src/lambda/http/generateUploadUrl.handler
     events:
@@ -186,6 +186,63 @@ functions:
           - xray:PutTraceSegments
           - xray:PutTelemetryRecords
         Resource: arn:aws:s3:::${self:provider.environment.S3_BUCKET_NAME}/*
+
+  SendNotifications:
+    environment:
+      STAGE: ${self:provider.stage}
+      API_ID:
+        Ref: WebsocketsApi
+    handler: src/lambda/s3/sendNotifications.handler
+    events:
+      - sns:
+          arn:
+            Fn::Join:
+              - ':'
+              - - arn:aws:sns
+                - Ref: AWS::Region
+                - Ref: AWS::AccountId
+                - ${self:custom.topicName}
+          topicName: ${self:custom.topicName}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:Query
+        Resource: arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.CONNECTIONS_TABLE}
+      - Effect: Allow
+        Action:
+          - s3:PutObject
+          - s3:GetObject
+        Resource: arn:aws:s3:::${self:provider.environment.S3_BUCKET_NAME}/*
+      - Effect: Allow
+        Action:
+          - execute-api:ManageConnections
+        Resource: arn:aws:execute-api:${opt:region, self:provider.region}:*:*/*/POST/@connections/{connectionId}
+
+  # TODO: Configure this function
+  # Provide property for setting up CORS, Authorizer, iamRoleStatements
+  ConnectHandler:
+    handler: src/lambda/websocket/connect.handler
+    events:
+      - websocket:
+          route: $connect
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:PutItem
+        Resource: arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.CONNECTIONS_TABLE}
+
+  # TODO: Configure this function
+  # Provide property for setting up CORS, Authorizer, iamRoleStatements
+  DisconnectHandler:
+    handler: src/lambda/websocket/disconnect.handler
+    events:
+      - websocket:
+          route: $disconnect
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:DeleteItem
+        Resource: arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.CONNECTIONS_TABLE}
 
 resources:
   Resources:
@@ -205,7 +262,7 @@ resources:
         BillingMode: PAY_PER_REQUEST
         TableName: ${self:provider.environment.TODOS_TABLE}
     onlyBody:
-      Type: "AWS::ApiGateway::RequestValidator"
+      Type: 'AWS::ApiGateway::RequestValidator'
       Properties:
         Name: 'only-body'
         RestApiId:
@@ -259,7 +316,48 @@ resources:
           gatewayresponse.header.Access-Control-Allow-Methods: "'GET,OPTIONS,POST,DELETE,PATCH,PUT'"
         ResponseType: DEFAULT_5XX
         RestApiId:
-          Ref: ApiGatewayRestApi 
+          Ref: ApiGatewayRestApi
+
+    # TODO: Create CONNECTIONS_TABLE table
+    WebSocketConnectionsDynamoDBTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: isConnect
+            AttributeType: S
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: isConnect
+            KeyType: HASH
+
+          - AttributeName: id
+            KeyType: RANGE
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${self:provider.environment.CONNECTIONS_TABLE}
+
+    SNSTopicPolicy:
+      Type: AWS::SNS::TopicPolicy
+      Properties:
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                AWS: '*'
+              Action: sns:Publish
+              Resource: !Ref ImagesTopic
+              Condition:
+                ArnLike:
+                  AWS:SourceArn: arn:aws:s3:::${self:provider.environment.S3_BUCKET_NAME}
+        Topics:
+          - !Ref ImagesTopic
+
+    ImagesTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        DisplayName: Image bucket topic
+        TopicName: ${self:custom.topicName}
 
     BucketPolicy:
       Type: AWS::S3::BucketPolicy
